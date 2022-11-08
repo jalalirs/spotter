@@ -37,20 +37,31 @@ def main():
 
 	api = SofarApi()
 	spotters = api.get_spotters()
+	logging.info(f"Spotters in account: {','.join([a.id for a in spotters])}")
 	if args.spotter:
-		spotters = [a for a in spotters if a.id == args.spotter]
+		spotters = [a for a in spotters if a.id in args.spotter.split(",")]
 	
 	dates = dates_bwn_twodates(date_start,date_end)
 	spotter_oper_data = ['battery_power', 'battery_voltage', 'humidity', 'solar_voltage']
 	spotter_data = {s.id:{k:[] for k in args.keys + spotter_oper_data} for s in spotters}
+	logging.info(f"Grabbing data for: {','.join([a.id for a in spotters])}")
 
-	for s in spotters:
-		for k in spotter_oper_data:
+	start_str = date_start.strftime("%Y-%m-%d")
+	end_str   = date_end.strftime("%Y-%m-%d")
+	data = {"start": start_str,
+		"end": end_str, 
+		"data": spotter_data}
+	
+	filename = f"data/{start_str}_{end_str}.json"
+	logging.info(f"Storing data in {filename}")
+
+	for k in spotter_oper_data:
+		for s in spotters:	
 			spotter_data[s.id][k] = getattr(s,k)
-		
-		logger.info(f"Grabbing data for {s.id}")
-		for i in range(1,len(dates)):
-			logger.info(f"Grabbing data for {s.id} for dates {dates[i-1]}-{dates[i]}")
+
+	for i in range(1,len(dates)):
+		for s in spotters:	
+			logger.info(f"Grabbing data for {s.id} for dates {dates[i-1]} to {dates[i]}")
 			d_date = s.grab_data(
 				limit=500,
 				start_date=dates[i-1],
@@ -64,18 +75,9 @@ def main():
 			)
 			for k in args.keys:	
 				spotter_data[s.id][k].append(d_date[k])
-
-	start_str = date_start.strftime("%Y-%m-%d")
-	end_str   = date_end.strftime("%Y-%m-%d")
-	data = {"start": start_str,
-		"end": end_str, 
-		"data": spotter_data}
-	
-	filename = f"data/{start_str}_{end_str}.json"
-	logging.info(f"Storing data in {filename}")
-
-	with open(filename,"w") as f:
-		f.write(json.dumps(data,indent=4))
+		# storing after each iteration to not repeat when fails
+		with open(filename,"w") as f:
+			f.write(json.dumps(data,indent=4))
 
 
 if __name__ == '__main__':
